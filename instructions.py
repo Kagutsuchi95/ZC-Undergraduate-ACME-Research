@@ -109,3 +109,9 @@ Created on Wed Mar 11 11:01:38 2026
     # if no anistrophy, if input polarization is vertical, max transmission at vertical, if 15 deg B then 135 deg polarizer angle should output min transmission (REALLY LOW INTENSITIES)
     # Rotate polarization, not crystal instead of keeping the polarization fixed and rotating the crystal
         # Take the field projection instead of the tensor projection    
+
+#%%
+# REALLY good results (4.1, 4.2, 4.3, 4.4, 4.5 all good)
+# Look into pulse compression (duration, stage 5)
+    # Map transmission and pulse duration to see where the optimal place is for max compression with highest efficiency
+# Change the plot in 4.5 to be at the optimal dial angle from the previous colormaps
