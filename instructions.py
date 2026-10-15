@@ -99,7 +99,7 @@ Created on Wed Mar 11 11:01:38 2026
 # Compare Stage 4 to 1D propagation code
     # Fix stage 4
         # A function of input theta (x) and output theta (y) seems to shoot up to 60 degrees at small angles experimentally, plateau until ~40 deg input, then input=output at ~45 deg
-        # Comparing vs 1D code could provide insight why at 2 deg input, output ~9 deg and not ~600 deg but at 15 deg its ~60 (correct for 15, not for 2)
+        # Comparing vs 1D code could provide insight why at 2 deg input, output ~9 deg and not ~60 deg but at 15 deg its ~60 (correct for 15, not for 2)
         
 #%%
 # Integrate over time and radius r|E(r)|^2 to rotate crystal and polarizer independently to see results from the lab
@@ -115,3 +115,8 @@ Created on Wed Mar 11 11:01:38 2026
 # Look into pulse compression (duration, stage 5)
     # Map transmission and pulse duration to see where the optimal place is for max compression with highest efficiency
 # Change the plot in 4.5 to be at the optimal dial angle from the previous colormaps
+#%%
+# cross reference with Jullien's paper
+    # test Barium Flouride to see if data matches their experimental data or improve
+        # bug testing, basically
+    
