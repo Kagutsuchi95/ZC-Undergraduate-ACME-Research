@@ -115,9 +115,17 @@ Created on Wed Mar 11 11:01:38 2026
 # Look into pulse compression (duration, stage 5)
     # Map transmission and pulse duration to see where the optimal place is for max compression with highest efficiency
 # Change the plot in 4.5 to be at the optimal dial angle from the previous colormaps
-
 #%%
 # cross reference with Jullien's paper
     # test Barium Flouride to see if data matches their experimental data or improve
         # bug testing, basically
+        
+#%%
+# 011 (holographic) cut crystal instead?
+    # See holographic cut means in Baf2
+    # See if we can use one for MgO to increase rotation
+    # Can we try using 110 crystals (check if Jullien used 110 or 011)
+    # Figure out the physics and tensor for both 110 and 011 
+    # Look at the physics, don't implement code (compare Claude and GPT)
+    # Try translating Jullien's crystal frame to the lab frame we use
     

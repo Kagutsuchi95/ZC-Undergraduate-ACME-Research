@@ -18,9 +18,23 @@ from scipy.interpolate import interp1d
 
 # --- Constants ---
 cc = 3e8                            # Speed of light
-C = 3.2e-22                         # Nonlinear X^(3) susceptibility tensor X^(3)_xxxx
-P = C/1.85                          # Cross-phase modulation coefficient, X^(3)_xxyy, relative to X^(3)_xxxx
 eps0 = 8.854e-12                    # Permittivity of free space
+
+# --- Crystal: BaF2 (Jullien et al., Opt. Lett. 33, 2353, 2008) ---
+# Only the crystal (and their 800 nm / 25 fs pulse) changes from Zach16; the beam stays the same Gaussian.
+# MgO values are kept commented out so we can switch back.
+#C = 3.2e-22                        # MgO X^(3)_xxxx
+#P = C/1.85                         # MgO X^(3)_xxyy (anisotropy sigma = 1 - 3/1.85 = -0.62)
+def n_BaF2(lam):
+    '''Malitson (1964) Sellmeier for BaF2, lam in m.'''
+    l2 = (lam*1e6)**2
+    return np.sqrt(1 + 0.643356*l2/(l2 - 0.057789**2) + 0.506762*l2/(l2 - 0.10968**2)
+                   + 3.8261*l2/(l2 - 46.3864**2))
+n2_BaF2 = 2.0e-20                   # Nonlinear index (m^2/W); doesn't matter for the Jullien test since we set the field from S
+sigma_BaF2 = -1.2                   # Anisotropy (X_xxxx - 3X_xxyy)/X_xxxx, Minkovski et al. JOSA B 2004 -- still need to check with Hammond
+n0_BaF2 = n_BaF2(800e-9)
+C = 4/3 * n0_BaF2**2 * eps0 * cc * n2_BaF2         # X^(3)_xxxx from n2
+P = C*(1 - sigma_BaF2)/3                            # X^(3)_xxyy, P/C = 0.733 (MgO was 0.54)
 
 # ws = 2*np.pi*cc/600e-9            # Frequency ws (signal)
 # B = 0.05                          # Angle for X(t) initial condition
@@ -62,21 +76,29 @@ I_sweep = 0.5 * eps0 * cc * Y0_sweep**2             # Intensity (W/m^2)
 Y0_base = 6e9
 #I_base = 9e16
 #Y0_base = (I_base/(0.5*eps0*cc))**0.5
-FWHM_base = 100e-15                                 # Pulse duration (s)                 
+#FWHM_base = 100e-15                                # MgO runs
+FWHM_base = 25e-15                                  # Pulse duration (s), Jullien's laser
 Tau_base = FWHM_base/(2*(np.log(2))**0.5)           # Width of gaussian (s)
-L_base = 500e-6
-Lambda_base = 785e-9
+#L_base = 500e-6                                    # MgO runs
+L_base = 2e-3                                       # Jullien's 2 mm BaF2
+#Lambda_base = 785e-9                               # MgO runs
+Lambda_base = 800e-9
 Lambda_base_micron = Lambda_base*1e6
 wp_base = 2*np.pi*cc/Lambda_base                    # Pump wavelength (rad/s)
 B_base = np.deg2rad(2)
-beta2_base = 87.149e-27                             # From refractiveindex.info
+#beta2_base = 87.149e-27                            # MgO at 785 nm, from refractiveindex.info
 #beta2_base = -27.138e-27
+# BaF2 beta2 from a fine central difference of k(w) on the Sellmeier (~38 fs^2/mm at 800 nm)
+dw_fd = wp_base*1e-3
+k_of_w = lambda om: n_BaF2(2*np.pi*cc/om)*om/cc
+beta2_base = (k_of_w(wp_base + dw_fd) - 2*k_of_w(wp_base) + k_of_w(wp_base - dw_fd))/dw_fd**2
 
 
 # --- Necessary Calculations ---
 dz_base = L_base/100
 z_eval_base = np.arange(0, L_base, dz_base)
-n_base = (2.956362 + 0.02195770/(Lambda_base_micron**2 - 0.01428322) - 0.01062387*Lambda_base_micron**2 - 0.0000204968*Lambda_base_micron**4)**0.5
+#n_base = (2.956362 + 0.02195770/(Lambda_base_micron**2 - 0.01428322) - 0.01062387*Lambda_base_micron**2 - 0.0000204968*Lambda_base_micron**4)**0.5   # MgO
+n_base = n_BaF2(Lambda_base)
 phase_base = np.exp(-1j * 0.5 * beta2_base * (w - wp_base*0)**2 * dz_base)
 a_base = 2*np.pi/Lambda_base * 3/8 * 1/n_base       # Coupling constant k*3/8/n0, where n0 is the index of refraction
 
@@ -1138,3 +1160,201 @@ for ax in axes:
     ax.legend(fontsize=8)
 plt.tight_layout()
 plt.show()
+
+#%% Stage 6 — Jullien cross-check: BaF2 XPW efficiency, spectrum and shortening vs S                -> ~15 min run time
+#
+# Needs the Parameters cell (now BaF2), Functions, Stage 3 and Stage 4.0 (grid + helpers). Nothing from 4.1-5.1.
+#
+# Bug test against Jullien et al., Opt. Lett. 33, 2353 (2008): 2 mm BaF2, 25 fs, 800 nm, crossed polarizers.
+# Beam is OUR Gaussian (w0_base = 100 um), not their super-Gaussian, so their efficiencies should come out
+# higher than ours -- the point is to see if the physics lines up, not to match a different beam.
+#
+# They plot everything against S = (2pi/lambda) n2 I0 L. In our equations the SPM phase is a*C*E0^2*L,
+# and with C = (4/3) n0^2 eps0 c n2 and I0 = 1/2 n0 eps0 c E0^2 that's exactly S. So set E0 from S
+# and n2 cancels out -- the comparison doesn't depend on which n2 value we believe.
+#
+# Their numbers to compare against: Fig. 3 efficiency vs S (up to 28%, and they say Gaussian beams top out
+# around 15%), Fig. 4b spectral width ~sqrt3 below 15% efficiency up to ~2.5x at 28%, and Fig. 5b 2.2x
+# shortening at 23% efficiency after removing the leftover spectral phase.
+
+S_sweep_J = np.array([0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5])
+B_J_deg = np.array([10.0, 15.0, 20.0, 22.5, 25.0, 30.0])     # XPW peaks near 22.5 deg from the crystal axis, so scan around it
+
+SS_J, BB_J = np.meshgrid(S_sweep_J, np.deg2rad(B_J_deg), indexing='ij')
+SS_J, BB_J = SS_J.ravel(), BB_J.ravel()
+E0_J = np.sqrt(SS_J/(a_base*C*L_base))                       # on-axis peak field for each S
+
+# propagate_2d_batched broadcasts Y0 against B, so every (S, B) pair goes in one batch
+z_eval_J = np.arange(0, L_base + dz_base/2, dz_base)
+X_J, Y_J = propagate_2d_batched(E0_J, Tau_base, BB_J, z_eval_J, dz_base,
+                                 H, r_array, dispersion=True, diffraction=True)
+
+# Efficiency = whole-beam energy through a polarizer crossed with the input (dial = B + 90)
+S0_J, S1_J, S2_J = integrated_stokes(X_J, Y_J, r_array)
+eff_J = transmission(S0_J, S1_J, S2_J, to_dial(BB_J + np.pi/2))
+
+# The XPW field itself (same projection as transmission()), and its whole-beam power vs time
+th_J = (BB_J + np.pi/2 - polarizer_zero_offset)[None, None, :]
+E_xpw_J = np.sin(th_J)*X_J + np.cos(th_J)*Y_J
+w_r_J = r_array[None, :, None]
+P_xpw_J = np.trapezoid(np.abs(E_xpw_J)**2*w_r_J, r_array, axis=1)          # (Nt, N)
+
+# Spectra: zero-pad 8x because a 25 fs pulse is only ~7 frequency bins wide on the plain grid.
+# Pad evenly on both sides in time, otherwise the pulse gets split in two and the spectrum gets fake fringes.
+Npad_J = 8*Nt
+w_pad_J = 2*np.pi*np.fft.fftshift(np.fft.fftfreq(Npad_J, d=dt))
+t_pad_J = (np.arange(Npad_J) - Npad_J//2)*dt
+def padded_spectrum(E):
+    pad = [(0, 0)]*E.ndim
+    pad[0] = ((Npad_J - E.shape[0])//2, Npad_J - E.shape[0] - (Npad_J - E.shape[0])//2)
+    return np.abs(np.fft.fftshift(np.fft.fft(np.fft.ifftshift(np.pad(E, pad), axes=0), axis=0), axes=0))**2
+
+Spec_xpw_J = np.trapezoid(padded_spectrum(E_xpw_J)*w_r_J, r_array, axis=1)  # whole-beam spectrum, like their spectrometer
+dw_in_J = fwhm_from_intensity(w_pad_J, padded_spectrum(np.exp(-t_array**2/(2*Tau_base**2))))
+
+spec_J = np.zeros(len(SS_J))
+raw_J = np.zeros(len(SS_J))
+tl_J = np.zeros(len(SS_J))
+for k in range(len(SS_J)):
+    spec_J[k] = fwhm_from_intensity(w_pad_J, Spec_xpw_J[:, k])/dw_in_J
+    raw_J[k] = fwhm_from_intensity(t_array, P_xpw_J[:, k])                  # straight out of the crystal, no compressor
+    # Transform limit = same spectrum with flat phase (an ideal compressor, like them removing the residual phase)
+    E_tl = np.fft.fftshift(np.fft.ifft(np.fft.ifftshift(np.sqrt(Spec_xpw_J[:, k]))))
+    tl_J[k] = fwhm_from_intensity(t_pad_J, np.abs(E_tl)**2)
+
+shape_J = (len(S_sweep_J), len(B_J_deg))
+eff_J, spec_J, raw_J, tl_J = (x.reshape(shape_J) for x in (eff_J, spec_J, raw_J, tl_J))
+
+# They'd have tuned the crystal for the most XPW, so keep the best input angle at each S
+j_best = np.argmax(eff_J, axis=1)
+i_S = np.arange(len(S_sweep_J))
+eff_b, spec_b, raw_b, tl_b = eff_J[i_S, j_best], spec_J[i_S, j_best], raw_J[i_S, j_best], tl_J[i_S, j_best]
+
+print(f"BaF2: n0 = {n_base:.4f}, beta2 = {beta2_base*1e27:.1f} fs^2/mm, P/C = {P/C:.3f}")
+print(" S   |  eff   best B | spectrum/input | raw FWHM | TL FWHM | 25 fs / TL")
+for k in range(len(S_sweep_J)):
+    print(f"{S_sweep_J[k]:4.1f} | {eff_b[k]*100:5.1f}%  {B_J_deg[j_best[k]]:4.1f} |      {spec_b[k]:.2f}      |"
+          f" {raw_b[k]*1e15:5.1f} fs | {tl_b[k]*1e15:5.1f} fs |   {FWHM_base/tl_b[k]:.2f}")
+
+# Jullien's data, digitized off a 600 dpi render of the paper (pixel positions -> axis values,
+# so good to roughly +/- 0.03 in S, +/- 0.3% efficiency, +/- 0.02 in spectral ratio).
+# The old Fig. 3 list was read by eye and was off by up to ~2x at low S -- these replace it.
+
+# Fig. 3: measured XPW efficiency (%) vs S (filled circles)
+S_exp_J = np.array([0.80, 0.99, 1.14, 1.41, 1.47, 1.75, 1.88, 2.19, 2.41, 2.72,
+                    2.77, 2.88, 3.12, 3.35, 3.50, 3.67, 3.91, 4.13])
+eff_exp_J = np.array([2.5, 3.7, 4.4, 6.9, 7.7, 10.6, 10.9, 14.5, 17.2, 19.2,
+                      20.2, 20.8, 23.2, 23.5, 25.1, 26.8, 27.8, 28.3])
+# Fig. 3: their model (dashed curve, super-Gaussian beam, [011] cut)
+S_th_J = np.array([0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.6])
+eff_th_J = np.array([0.7, 2.8, 6.5, 11.1, 15.8, 22.4, 29.3, 34.4, 39.7])
+
+# Fig. 4b: measured XPW spectral width / laser spectral width vs XPW efficiency (diamonds)
+eff_spec_exp_J = np.array([2.2, 6.9, 7.5, 10.6, 11.0, 14.6, 17.4, 19.1, 20.3, 22.4, 23.5, 26.8, 28.0, 28.6])
+spec_exp_J = np.array([1.75, 1.70, 1.61, 1.64, 1.73, 1.94, 2.13, 2.20, 2.22, 2.37, 2.41, 2.48, 2.53, 2.85])
+# Fig. 4b: their model (solid curve)
+eff_spec_th_J = np.array([1.0, 7.5, 15.0, 20.0, 27.0, 30.0])
+spec_th_J = np.array([1.74, 1.84, 2.00, 2.17, 2.55, 2.90])
+
+#%%
+plt.figure()
+plt.plot(S_exp_J, eff_exp_J, 'ko', label='Jullien 2008 data (Fig. 3)')
+plt.plot(S_th_J, eff_th_J, 'k--', lw=1, label='Jullien 2008 model (super-Gaussian)')
+plt.plot(S_sweep_J, eff_b*100, 'o-', label='Our model (Gaussian beam)')
+plt.axhline(15, color='0.6', ls='--', lw=0.8, label='Their quoted Gaussian-beam limit (15%)')
+plt.xlabel('S = (2π/λ) n₂ I₀ L')
+plt.ylabel('XPW efficiency (%)')
+plt.title('Efficiency vs S (Jullien Fig. 3)')
+plt.legend()
+
+plt.figure()
+plt.plot(eff_spec_exp_J, spec_exp_J, 'kD', ms=5, label='Jullien 2008 data (Fig. 4b)')
+plt.plot(eff_spec_th_J, spec_th_J, 'k--', lw=1, label='Jullien 2008 model')
+plt.plot(eff_b*100, spec_b, 'o-', label='Our model (Gaussian beam)')
+plt.axhline(np.sqrt(3), color='k', ls=':', label='√3')
+plt.xlabel('XPW efficiency (%)')
+plt.ylabel('XPW spectral width / input width')
+plt.title('Spectral broadening (Jullien Fig. 4b)')
+plt.legend()
+
+#%% Stage 6.1 — Jullien Fig. 5b equivalent: XPW pulse in time + spectrum and phase                  -> ~1 min run time
+#
+# Needs Parameters (BaF2), Functions, Stage 3 and Stage 4.0. Doesn't need the Stage 6 sweep.
+#
+# Their Fig. 5b is the XPW pulse at 23% efficiency after they computationally removed the leftover
+# spectral phase (11.5 fs), plus that phase. Our Gaussian beam tops out at 19.5% (S = 4.5, best angle 20 deg),
+# so this is the closest point we have. Transform-limited = same spectrum with flat phase (ideal compressor).
+
+S_5b = 4.5
+B_5b = np.deg2rad(20.0)
+E0_5b = np.sqrt(S_5b/(a_base*C*L_base))                 # same S -> E0 conversion as Stage 6
+z_5b = np.arange(0, L_base + dz_base/2, dz_base)
+X_5b, Y_5b = propagate_2d_batched(np.array([E0_5b]), Tau_base, np.array([B_5b]), z_5b, dz_base,
+                                   H, r_array, dispersion=True, diffraction=True)
+
+# XPW = component through the polarizer crossed with the input (dial = B + 90)
+th_5b = B_5b + np.pi/2 - polarizer_zero_offset
+E_xpw_5b = (np.sin(th_5b)*X_5b + np.cos(th_5b)*Y_5b)[:, :, 0]          # (Nt, Nr)
+S0_5b, S1_5b, S2_5b = integrated_stokes(X_5b, Y_5b, r_array)
+eff_5b = transmission(S0_5b, S1_5b, S2_5b, to_dial(np.array([B_5b + np.pi/2])))[0]
+
+# Zero-pad 8x in time (evenly on both sides) so the 25 fs spectrum isn't just a few bins
+Npad_5b = 8*Nt
+pad_5b = ((Npad_5b - Nt)//2, Npad_5b - Nt - (Npad_5b - Nt)//2)
+t_pad_5b = (np.arange(Npad_5b) - Npad_5b//2)*dt
+w_pad_5b = 2*np.pi*np.fft.fftshift(np.fft.fftfreq(Npad_5b, d=dt))
+Ew_5b = np.fft.fftshift(np.fft.fft(np.fft.ifftshift(np.pad(E_xpw_5b, (pad_5b, (0, 0))), axes=0), axis=0), axes=0)
+
+Spec_5b = np.trapezoid(np.abs(Ew_5b)**2*r_array[None, :], r_array, axis=1)   # whole-beam spectrum
+phase_5b = np.unwrap(np.angle(Ew_5b[:, 0]))                                   # phase on axis, where most of the energy is
+
+# Pulse straight out of the crystal (whole-beam power vs time) and the transform limit
+P_raw_5b = np.trapezoid(np.abs(E_xpw_5b)**2*r_array[None, :], r_array, axis=1)
+E_tl_5b = np.fft.fftshift(np.fft.ifft(np.fft.ifftshift(np.sqrt(Spec_5b))))
+I_tl_5b = np.abs(E_tl_5b)**2
+fwhm_tl_5b = fwhm_from_intensity(t_pad_5b, I_tl_5b)
+fwhm_raw_5b = fwhm_from_intensity(t_array, P_raw_5b)
+
+# Envelope frequency -> wavelength (our w is relative to the carrier wp_base)
+lam_nm_5b = 2*np.pi*cc/(wp_base + w_pad_5b)*1e9
+in_band = Spec_5b > 0.02*np.max(Spec_5b)                  # only show phase where there's actually light
+
+# Take out the constant and linear parts of the phase (just an overall phase and a time shift),
+# like a SPIDER retrieval would, so only the chirp is left
+ph_5b = phase_5b - phase_5b[np.argmax(Spec_5b)]
+lin_fit = np.polyfit(w_pad_5b[in_band], ph_5b[in_band], 1)
+ph_5b = ph_5b - np.polyval(lin_fit, w_pad_5b)
+
+Spec_in_5b = np.abs(np.fft.fftshift(np.fft.fft(np.fft.ifftshift(
+    np.pad(np.exp(-t_array**2/(2*Tau_base**2)), pad_5b)))))**2
+in_band_input = Spec_in_5b > 1e-3*np.max(Spec_in_5b)
+
+print(f"S = {S_5b}, B = {np.rad2deg(B_5b):.1f} deg: efficiency {eff_5b*100:.1f}%, "
+      f"raw XPW {fwhm_raw_5b*1e15:.1f} fs, transform-limited {fwhm_tl_5b*1e15:.1f} fs "
+      f"({FWHM_base/fwhm_tl_5b:.2f}x shorter than the input)")
+
+fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+axes[0].plot(t_pad_5b*1e15, I_tl_5b/np.max(I_tl_5b), 'k-', label=f'Transform-limited ({fwhm_tl_5b*1e15:.1f} fs)')
+axes[0].plot(t_array*1e15, P_raw_5b/np.max(P_raw_5b), 'C1--', label=f'Straight out of crystal ({fwhm_raw_5b*1e15:.1f} fs)')
+axes[0].plot(t_array*1e15, np.exp(-t_array**2/Tau_base**2), 'C0:', label=f'Input ({FWHM_base*1e15:.0f} fs)')
+axes[0].set_xlim(-50, 50)
+axes[0].set_xlabel('Time (fs)')
+axes[0].set_ylabel('Temporal intensity')
+axes[0].set_title(f'XPW pulse, S = {S_5b}, B = {np.rad2deg(B_5b):.0f}°, efficiency {eff_5b*100:.1f}%\n'
+                  f'(Jullien Fig. 5b: 11.5 fs at 23%)')
+axes[0].legend(fontsize=8)
+
+axes[1].plot(lam_nm_5b[in_band], Spec_5b[in_band]/np.max(Spec_5b), 'k-', label='XPW spectrum')
+axes[1].plot(lam_nm_5b[in_band_input], Spec_in_5b[in_band_input]/np.max(Spec_in_5b), 'k:', label='Input spectrum')
+axes[1].set_xlim(700, 900)
+axes[1].set_xlabel('Wavelength (nm)')
+axes[1].set_ylabel('Spectral intensity')
+axes[1].legend(loc='upper left', fontsize=8)
+ax_ph = axes[1].twinx()
+ax_ph.plot(lam_nm_5b[in_band], ph_5b[in_band], 'C3--')
+ax_ph.set_ylim(-5, 5)
+ax_ph.set_ylabel('Spectral phase (rad), on axis', color='C3')
+axes[1].set_title('Spectrum and phase (compare Jullien Fig. 5a / 5b dashed)')
+plt.tight_layout()
+plt.show()
+
