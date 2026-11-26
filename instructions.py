@@ -122,10 +122,18 @@ Created on Wed Mar 11 11:01:38 2026
         
 #%%
 # 011 (holographic) cut crystal instead?
-    # See holographic cut means in Baf2
+    # See what holographic cut means in Baf2
     # See if we can use one for MgO to increase rotation
     # Can we try using 110 crystals (check if Jullien used 110 or 011)
     # Figure out the physics and tensor for both 110 and 011 
     # Look at the physics, don't implement code (compare Claude and GPT)
     # Try translating Jullien's crystal frame to the lab frame we use
-    
+
+#%%
+# Throw h cut with pulsed beaam into simulation to see how that works
+    # As a test for more efficient pulse compression
+    # Interesting if we can do a wavelength scaling to test if anomalous dispersion compresses itself
+        # 1D case without polarization to find the intensity to clean up the intensity vs time plot (remove/reduce the wings as much as possible)
+            # parameters we can tune: w0, z (length), I0 (intensity), tau (pulse duration)
+            # see what happens in a 1mm to 3mm (maybe more) length when messing with w0 an I0
+        # then put in polarization to clean up the wings (compare to bruno schmitt paper around 2010)
