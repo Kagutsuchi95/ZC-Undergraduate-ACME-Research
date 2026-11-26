@@ -137,3 +137,15 @@ Created on Wed Mar 11 11:01:38 2026
             # parameters we can tune: w0, z (length), I0 (intensity), tau (pulse duration)
             # see what happens in a 1mm to 3mm (maybe more) length when messing with w0 an I0
         # then put in polarization to clean up the wings (compare to bruno schmitt paper around 2010)
+        
+#%%
+# Extend the first plots to z = 10 or higher to get a full picture (even if the crystal doesnt need to be that thick, would be interesting to look at)
+# Benchmark against BaF2
+# See if anybody did what we're doing in the infrared (look at papers)
+    # If they have, compare results to check validity.
+    # If not, figure out what's different
+    
+    # Wants to get a really strong nonlinear polarization rotation, hammond created a donut shape beam before in normal regime, wants to reach a "critcal threshold" in anomalous regime to cause maximum polarization rotation, should work since it does similar stuff experimentally
+    # Compare to Jullien simulations (multiple papers) and papers that cited their work
+    
+    # Basically, we just want high transmission and max compression
